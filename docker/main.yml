@@ -1,0 +1,11 @@
+version: '3.2'
+
+services:
+   imagebuild:
+     build: 
+       context: ..
+       dockerfile: docker/Dockerfile
+     volumes:
+       - ../output:/output
+       - ../input:/input
+       - ../assets:/assets
