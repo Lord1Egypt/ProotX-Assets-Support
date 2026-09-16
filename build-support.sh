@@ -12,8 +12,9 @@
 #     NOTE: ".a10" is a legacy ProotX filename that denotes the modern host runtime
 #     slot. It does not mean API 10.
 #
-# All upstream inputs are pinned and checksum-verified. No floating branch, no
-# ubuntu:latest, no blind sed, no in-place mutation of tracked upstream trees.
+# All upstream inputs are pinned and checksum-verified. No floating builder base
+# image, no floating source branch, no blind in-place text substitution of
+# tracked upstream trees.
 #
 # Usage:
 #   ./build-support.sh all          # arm64 arm x86 x86_64
