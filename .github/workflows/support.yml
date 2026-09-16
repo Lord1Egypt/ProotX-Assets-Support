@@ -1,29 +1,23 @@
 name: support
 
-# P1F2 reproducible support toolchain gate.
-#
-# Two distinct gates:
-#   1. LEGACY INPUT VERIFICATION  - the frozen v1.0.0 release and its per-file
-#      checksums must be exactly as locked. No rebuild of legacy binaries.
-#   2. MODERN SOURCE BUILD        - the modern runtime lane (.a10 slots) is built
-#      from pinned source at API 24 with NDK r29 using the pinned builder image.
-#
-# This workflow never publishes a release and never mutates v1.0.0.
+# Trusted modern source build. This workflow runs the privileged pinned builder, so it is
+# restricted to repository-owned branches and manual dispatch. It MUST NOT run on
+# pull_request (PR-controlled code must never be executed through the privileged builder).
 
 on:
   push:
-    branches:
-      - 'feature/**'
-      - main
-  pull_request:
-    branches: [ main ]
+    branches: [ main, 'feature/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   verify-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Validate provenance lock
         run: |
@@ -46,7 +40,6 @@ jobs:
       - name: Guard against floating build inputs
         run: |
           set -euo pipefail
-          # no ubuntu:latest, no floating branch, no blind sed in the modern builder/lock
           if grep -rnE "ubuntu:latest|merge-it|android-5|sed -i" build-support.sh provenance/ ; then
             echo "Floating or blind build input found"; exit 1
           fi
@@ -84,9 +77,12 @@ jobs:
           fail=0
           for abi in arm64 x86_64; do
             stage=".work/stage/$abi"
-            for f in proot.a10 loader.a10; do
+            for f in proot.a10 loader.a10 libtalloc.so.2.a10 libandroid-shmem.so; do
               so="$stage/$f"
               if [ ! -f "$so" ]; then echo "MODERN     $abi  $f  MISSING"; fail=1; continue; fi
+              # 32-bit slots are not part of the 16KB requirement
+              cls=$(file -b "$so" | grep -oE 'ELF (32|64)-bit' | grep -oE '32|64')
+              if [ "$cls" != "64" ]; then printf "%-10s %-10s %-16s %-8s %-9s %-16s %s\n" "modern" "$abi" "$f" "source" "24" "(32-bit)" "SKIP"; continue; fi
               aligns=$(readelf -lW "$so" | awk '/LOAD/{print $NF}' | tr '\n' ' ')
               ok=PASS
               for a in $aligns; do
@@ -100,7 +96,7 @@ jobs:
           [ "$fail" -eq 0 ] || { echo "16KB gate FAILED"; exit 1; }
 
       - name: Upload candidate bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: prootx-support-candidate
           path: dist/*.zip

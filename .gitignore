@@ -1,2 +1,6 @@
 .work/
 dist*/
+.p1f3-*/
+out*/
+release/
+__pycache__/
