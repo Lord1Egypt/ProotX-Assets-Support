@@ -88,6 +88,7 @@ build_modern() {
   echo ">> building modern lane: $abi ($tarch) API $MODERN_API_LEVEL, NDK r29"
   docker run --rm --user root -e HOME=/home/builder \
     --device /dev/fuse --cap-add CAP_SYS_ADMIN \
+    --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
     -v "$WORK/termux-packages:/home/builder/termux-packages" \
     -v "$out:/home/builder/termux-packages/output" \
     -v "$cache:/home/builder/.termux-build/_cache" \
