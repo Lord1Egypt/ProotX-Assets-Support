@@ -1,0 +1,107 @@
+name: support
+
+# P1F2 reproducible support toolchain gate.
+#
+# Two distinct gates:
+#   1. LEGACY INPUT VERIFICATION  - the frozen v1.0.0 release and its per-file
+#      checksums must be exactly as locked. No rebuild of legacy binaries.
+#   2. MODERN SOURCE BUILD        - the modern runtime lane (.a10 slots) is built
+#      from pinned source at API 24 with NDK r29 using the pinned builder image.
+#
+# This workflow never publishes a release and never mutates v1.0.0.
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - main
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate provenance lock
+        run: |
+          python3 - <<'PY'
+          import json
+          lock = json.load(open("provenance/sources.lock.json"))
+          assert lock["schemaVersion"] == 1
+          assert lock["applicationMinSdk"] == 21
+          assert lock["legacySupportHostRange"] == "21-28"
+          assert lock["modernSupportHostRange"] == "29+"
+          assert lock["modernSupportBuildApi"] == 24
+          assert lock["toolchain"] == {"ndk": "29", "apiLevel": 24}
+          assert lock["termuxPackages"]["commit"] == "0ffca06c59752c6d52c646980d956b961064e1fc"
+          assert lock["builder"]["digest"] == "sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab"
+          assert lock["dependencies"][0]["commit"] == "7266fb3e8516535682f5a9c8f3a7e70f6506eddb"
+          assert lock["dependencies"][0]["archiveSha256"] == "29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135"
+          print("lock OK")
+          PY
+
+      - name: Guard against floating build inputs
+        run: |
+          set -euo pipefail
+          # no ubuntu:latest, no floating branch, no blind sed in the modern builder/lock
+          if grep -rnE "ubuntu:latest|merge-it|android-5|sed -i" build-support.sh provenance/ ; then
+            echo "Floating or blind build input found"; exit 1
+          fi
+          bash -n build-support.sh
+          echo "builder input guard OK"
+
+      - name: LEGACY INPUT VERIFICATION
+        run: |
+          set -euo pipefail
+          mkdir -p .work/legacy
+          python3 - <<'PY' > /tmp/legacy_zips.txt
+          import json
+          lock = json.load(open("provenance/sources.lock.json"))
+          for abi, digest in lock["legacyRelease"]["zips"].items():
+              print(abi, digest)
+          PY
+          while read -r abi digest; do
+            curl -fsSL -o ".work/legacy/$abi-assets.zip" \
+              "https://github.com/Lord1Egypt/ProotX-Assets-Support/releases/download/v1.0.0/$abi-assets.zip"
+            echo "$digest  .work/legacy/$abi-assets.zip" | sha256sum -c -
+            echo "LEGACY VERIFY  $abi  ZIP  $digest  PASS"
+          done < /tmp/legacy_zips.txt
+
+      - name: MODERN SOURCE BUILD (API 24 / NDK r29) arm64 + x86_64
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/termux/package-builder@sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab
+          ./build-support.sh arm64
+          ./build-support.sh x86_64
+
+      - name: MODERN 64-BIT 16KB GATE + slot report
+        run: |
+          set -euo pipefail
+          echo "slot       abi        filename         source   buildApi  alignment        result"
+          fail=0
+          for abi in arm64 x86_64; do
+            stage=".work/stage/$abi"
+            for f in proot.a10 loader.a10; do
+              so="$stage/$f"
+              if [ ! -f "$so" ]; then echo "MODERN     $abi  $f  MISSING"; fail=1; continue; fi
+              aligns=$(readelf -lW "$so" | awk '/LOAD/{print $NF}' | tr '\n' ' ')
+              ok=PASS
+              for a in $aligns; do
+                hex="${a#0x}"
+                [ "$((16#$hex))" -ge 16384 ] || ok=FAIL
+              done
+              [ "$ok" = PASS ] || fail=1
+              printf "%-10s %-10s %-16s %-8s %-9s %-16s %s\n" "modern" "$abi" "$f" "source" "24" "$aligns" "$ok"
+            done
+          done
+          [ "$fail" -eq 0 ] || { echo "16KB gate FAILED"; exit 1; }
+
+      - name: Upload candidate bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: prootx-support-candidate
+          path: dist/*.zip
+          if-no-files-found: error

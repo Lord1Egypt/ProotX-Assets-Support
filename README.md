@@ -23,9 +23,19 @@ ProotX APK at build time:
 ## Rebuilding the support bundle
 
 ```bash
-./buildArch.sh <arch>   # arch in: arm arm64 x86 x86_64 all
+./build-support.sh all          # or: arm64 | arm | x86 | x86_64
 ```
 
-Builds run in Docker (see `docker/`) and produce the release zips under `assets/<arch>/`.
-Publish them as a GitHub release; the app build downloads the release pinned in
-`app/build.gradle` (`downloadAssets` task).
+The modern lane (`.a10` slots, host API 29+) is built from pinned source at API 24 with
+NDK r29 inside the pinned `ghcr.io/termux/package-builder` image. The normal slots and all
+other files are the frozen v1.0.0 legacy inputs, verified against locked checksums and never
+rebuilt here. Outputs are deterministic candidate bundles written to `dist/`; they are CI/local
+artifacts only and are **not** published automatically.
+
+All pins live in [`provenance/sources.lock.json`](provenance/sources.lock.json). See
+[`docs/PROVENANCE.md`](docs/PROVENANCE.md) for the dual-lane model and the 16 KB packaging debt,
+and [`docs/HISTORICAL_BUILDER.md`](docs/HISTORICAL_BUILDER.md) for the removed historical builder.
+
+Publishing a release is a separate step (P1F3). The app build downloads the release pinned in
+`app/build.gradle` (`downloadAssets` task) and remains on `v1.0.0`.
+
