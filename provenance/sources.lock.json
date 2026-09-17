@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
-  "description": "ProotX-Assets-Support reproducible support-bundle source lock (P1F2).",
+  "schemaVersion": 2,
+  "description": "ProotX-Assets-Support reproducible dual-lane support-bundle source lock (v1.2.0).",
   "applicationMinSdk": 21,
   "legacySupportHostRange": "21-28",
   "modernSupportHostRange": "29+",
   "modernSupportBuildApi": 24,
-  "runtimeSelector": "ProotXFiles selects *.a10 slots on host API >= 29 and normal slots on API < 29 (unchanged by P1F2)",
+  "runtimeSelector": "ProotXFiles selects the modern lane on host API >= 29 and the legacy lane on API < 29",
   "sourceDateEpoch": {
     "value": 1787437959,
     "origin": "termux/proot v5.1.107.92 tag-commit timestamp 2026-08-22T22:32:39Z"
@@ -18,11 +18,28 @@
   },
   "toolchain": {
     "ndk": "29",
+    "ndkVersion": "29.0.14206865",
     "apiLevel": 24
   },
   "termuxPackages": {
     "repository": "https://github.com/termux/termux-packages",
     "commit": "0ffca06c59752c6d52c646980d956b961064e1fc"
+  },
+  "metaLineage": {
+    "note": "Binary-proven by the P1F4A R1 probe: the frozen 2019 sidecars carry clang 7.0.2 and fake_id0.c line refs matching these exact commits, and require -DUSERLAND.",
+    "userlandDefine": "-DUSERLAND",
+    "sidecar": {
+      "repository": "https://github.com/CypherpunkArmory/proot",
+      "commit": "2a7f6d9d46552ed75cf1f2cab2391816f004877b",
+      "date": "2019-01-16",
+      "artifact": "proot_meta"
+    },
+    "leveldb": {
+      "repository": "https://github.com/CypherpunkArmory/proot",
+      "commit": "998dd31b6283e07233ec9004d585bce5ab1a4c27",
+      "date": "2019-02-04",
+      "artifact": "proot_meta_leveldb"
+    }
   },
   "dependencies": [
     {
@@ -32,7 +49,65 @@
       "commit": "7266fb3e8516535682f5a9c8f3a7e70f6506eddb",
       "archiveSha256": "29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135",
       "license": "GPL-2.0",
-      "role": "modern runtime (source-built)"
+      "lane": "modern"
+    },
+    {
+      "name": "busybox",
+      "source": "https://busybox.net/downloads/busybox-1.38.0.tar.bz2",
+      "version": "1.38.0",
+      "archiveSha256": "34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2",
+      "license": "GPL-2.0",
+      "lane": "modern",
+      "note": "termux patchset from termuxPackages commit; also the static busybox_static build"
+    },
+    {
+      "name": "dropbear",
+      "source": "https://github.com/termux/termux-packages/tree/master/packages/dropbear",
+      "version": "2026.94",
+      "license": "MIT",
+      "lane": "modern"
+    },
+    {
+      "name": "openssl",
+      "source": "https://github.com/openssl/openssl/releases/download/openssl-3.6.3/openssl-3.6.3.tar.gz",
+      "version": "3.6.3",
+      "license": "Apache-2.0",
+      "lane": "modern"
+    },
+    {
+      "name": "termux-auth",
+      "source": "https://github.com/termux/termux-auth",
+      "version": "1.5.0-1",
+      "license": "GPL-3.0",
+      "lane": "modern"
+    },
+    {
+      "name": "leveldb",
+      "source": "https://github.com/termux/termux-packages/tree/master/packages/leveldb",
+      "version": "1.23-4",
+      "license": "BSD-3-Clause",
+      "lane": "modern"
+    },
+    {
+      "name": "snappy",
+      "source": "https://github.com/termux/termux-packages/tree/master/packages/libsnappy",
+      "version": "1.3.0",
+      "license": "BSD-3-Clause",
+      "lane": "modern"
+    },
+    {
+      "name": "zlib",
+      "source": "https://github.com/termux/termux-packages/tree/master/packages/zlib",
+      "version": "1.3.2",
+      "license": "Zlib",
+      "lane": "modern"
+    },
+    {
+      "name": "pcre2",
+      "source": "https://github.com/termux/termux-packages/tree/master/packages/pcre2",
+      "version": "10.47",
+      "license": "BSD-3-Clause",
+      "lane": "modern"
     },
     {
       "name": "libtalloc",
@@ -40,57 +115,54 @@
       "version": "2.4.3",
       "archiveSha256": "dc46c40b9f46bb34dd97fe41f548b0e8b247b77a918576733c528e83abd854dd",
       "license": "GPL-3.0",
-      "role": "modern runtime dependency (source-built)"
+      "lane": "modern"
     },
     {
       "name": "libandroid-shmem",
       "source": "https://github.com/termux/libandroid-shmem",
       "tag": "v0.7",
       "license": "BSD-3-Clause",
-      "role": "modern runtime dependency (source-built)"
+      "lane": "modern"
+    },
+    {
+      "name": "libandroid-selinux",
+      "source": "https://github.com/termux/termux-packages/tree/master/packages/libandroid-selinux",
+      "version": "14.0.0.11-1",
+      "license": "Apache-2.0",
+      "lane": "modern"
+    },
+    {
+      "name": "libc++",
+      "source": "Android NDK r29 29.0.14206865 libc++",
+      "version": "r29",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "lane": "modern"
     }
   ],
   "legacyRelease": {
-    "tag": "v1.0.0",
+    "tag": "v1.1.0",
     "zips": {
-      "arm64-v8a": "da01eab4001714217fafa40518cfb9e9d5cabf958c424598203df175a0027fc7",
-      "armeabi-v7a": "43ecb354d120b33338bd3e926e2c90ea9ec7bffe77aa8d4e22a47e1d91a1822a",
-      "x86": "308822243d6b103f5adea1a87bbb9647ed7bb5bfec1a0dfbb48273dd780162f9",
-      "x86_64": "bd88414acb1097df5a91e5beb0d14b855a8b1bc0526869165b1a8b61d53ddc77"
+      "arm64-v8a": "7f2792643123350b8e4177141ab1bbcb7262296dbcff9380311c9835c79cc7c4",
+      "armeabi-v7a": "f7b935f6e027064d4da7ad2d67eede53353faecd423d3d4bd04491e5d4bba5ea",
+      "x86": "25a53c331a5f911198eebb067f4510debe768bc427b06395af771a9e3d9d3cd4",
+      "x86_64": "f6248107febfc413ce66884417a7109424c8690d0c40a226f0fb9ece5071109b"
     },
     "perFileChecksums": "provenance/legacy-v1.0.0.files.sha256",
-    "disposition": "FROZEN LEGACY INPUT - normal-slot binaries for host API 21-28; not source-reproducible by the modern builder"
+    "disposition": "FROZEN LEGACY INPUT - API 21-28 native payload; the non-.a10 files are byte-identical to v1.0.0; never rebuilt by the modern builder"
   },
-  "legacyUnknownProvenance": [
-    {
-      "name": "proot_meta",
-      "status": "unknown-provenance",
-      "note": "not produced by termux-packages; custom ProotX variant; selected via .proot_version; retained frozen, not rebuilt"
-    },
-    {
-      "name": "proot_meta_leveldb",
-      "status": "unknown-provenance",
-      "note": "as proot_meta, leveldb meta variant"
-    }
-  ],
   "patches": {
-    "policy": "tracked patch files applied with patch --fuzz=0 only; no blind sed; no patch is required for the API24 modern lane",
-    "diagnosticOnly": [
-      {
-        "name": "libtalloc-2.4.3-api21-skip-os2-delete-test.patch",
-        "status": "diagnostic-only / NOT ADOPTED"
-      }
-    ]
+    "policy": "tracked patch files applied with patch --silent -p1 only; no blind sed of tracked upstream trees",
+    "caCertificatesSeed": {
+      "name": "ca-certificates PEM pre-seed",
+      "sha256": "f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9",
+      "source": "https://packages.termux.dev/apt/termux-main/pool/main/c/ca-certificates/ca-certificates_1%3a2026.08.13_all.deb",
+      "note": "The ca-certificates dependency is preserved. The pinned recipe fetches this exact file from curl.se; some build networks DPI-block that host, so the identical hash-pinned file is seeded so termux_download verifies and skips the network fetch."
+    }
   },
-  "slots": {
-    "proot.a10": "modern",
-    "loader.a10": "modern",
-    "loader32.a10": "modern",
-    "libtalloc.so.2.a10": "modern",
-    "libandroid-shmem.so": "modern (new dependency file)",
-    "proot": "legacy",
-    "loader": "legacy",
-    "loader32": "legacy",
-    "libtalloc.so.2": "legacy"
+  "routing": {
+    "schema": "common | legacy | modern inside each ABI archive, with manifest.json",
+    "common": "architecture-neutral non-native scripts/data",
+    "legacy": "API 21-28 executable/native compatibility payload",
+    "modern": "API 29+ executable/native payload"
   }
 }
