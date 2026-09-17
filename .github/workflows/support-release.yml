@@ -1,9 +1,9 @@
 name: support-release
 
-# Trusted release pipeline. Triggered only by push of a release tag (v*), so the build always
-# runs from the exact tagged commit. Two independent jobs:
-#   build   - read-only token, runs the privileged pinned builder, produces verified assets
-#   publish - write token, NO Docker, publishes the already-verified assets
+# Trusted release pipeline. Triggered only by push of a release tag (v*), so the
+# build always runs from the exact tagged commit. Two independent jobs:
+#   build   - read-only token, runs the privileged pinned builder + NDK, produces verified assets
+#   publish - write token, NO Docker, NO build, publishes the already-verified assets
 #
 # The privileged builder never runs for pull_request or untrusted refs.
 
@@ -14,6 +14,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  ANDROID_NDK_VERSION: '29.0.14206865'
 
 jobs:
   build:
@@ -26,40 +29,32 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: ''
+
+      - name: Install pinned NDK r29
+        run: sdkmanager "ndk;$ANDROID_NDK_VERSION"
+
       - name: Verify tagged source lock
         run: |
           python3 - <<'PY'
           import json
           lock = json.load(open("provenance/sources.lock.json"))
-          assert lock["schemaVersion"] == 1
+          assert lock["schemaVersion"] == 2
           assert lock["applicationMinSdk"] == 21
           assert lock["legacySupportHostRange"] == "21-28"
           assert lock["modernSupportHostRange"] == "29+"
           assert lock["modernSupportBuildApi"] == 24
-          assert lock["toolchain"] == {"ndk": "29", "apiLevel": 24}
+          assert lock["toolchain"]["ndk"] == "29"
           assert lock["termuxPackages"]["commit"] == "0ffca06c59752c6d52c646980d956b961064e1fc"
           assert lock["builder"]["digest"] == "sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab"
-          assert lock["dependencies"][0]["commit"] == "7266fb3e8516535682f5a9c8f3a7e70f6506eddb"
-          assert lock["dependencies"][0]["archiveSha256"] == "29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135"
+          assert lock["metaLineage"]["sidecar"]["commit"] == "2a7f6d9d46552ed75cf1f2cab2391816f004877b"
+          assert lock["metaLineage"]["leveldb"]["commit"] == "998dd31b6283e07233ec9004d585bce5ab1a4c27"
+          assert lock["metaLineage"]["userlandDefine"] == "-DUSERLAND"
           print("lock OK")
           PY
-
-      - name: LEGACY INPUT VERIFICATION
-        run: |
-          set -euo pipefail
-          mkdir -p .work/legacy
-          python3 - <<'PY' > /tmp/legacy_zips.txt
-          import json
-          lock = json.load(open("provenance/sources.lock.json"))
-          for abi, digest in lock["legacyRelease"]["zips"].items():
-              print(abi, digest)
-          PY
-          while read -r abi digest; do
-            curl -fsSL -o ".work/legacy/$abi-assets.zip" \
-              "https://github.com/Lord1Egypt/ProotX-Assets-Support/releases/download/v1.0.0/$abi-assets.zip"
-            echo "$digest  .work/legacy/$abi-assets.zip" | sha256sum -c -
-            echo "LEGACY VERIFY  $abi  ZIP  $digest  PASS"
-          done < /tmp/legacy_zips.txt
 
       - name: Pull pinned builder
         run: docker pull ghcr.io/termux/package-builder@sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab
@@ -70,7 +65,7 @@ jobs:
           OUT_DIR: ${{ github.workspace }}/dist-a
         run: ./build-support.sh all
 
-      - name: Build #2 (all four ABIs, independent cache/output)
+      - name: Build #2 (all four ABIs, independent working root)
         env:
           WORK_DIR: ${{ github.workspace }}/.work-b
           OUT_DIR: ${{ github.workspace }}/dist-b
@@ -85,6 +80,7 @@ jobs:
             echo "$z  A=$a  B=$b"
             [ "$a" = "$b" ] || { echo "REPRODUCIBILITY FAILURE for $z"; exit 1; }
           done
+          cmp dist-a/routing.json dist-b/routing.json
           echo "two clean builds are byte-identical"
 
       - name: Verify freshly built archives against the committed release manifest
@@ -111,12 +107,12 @@ jobs:
             --dist dist-a --version "$VER" --out out \
             --source-commit "$GITHUB_SHA" --repo-root "$GITHUB_WORKSPACE"
 
-      - name: Stage flat release assets
+      - name: Stage release assets
         run: |
           set -euo pipefail
           VER="${GITHUB_REF_NAME}"
           mkdir -p release
-          cp dist-a/*.zip release/
+          cp dist-a/*.zip dist-a/routing.json release/
           cp out/SHA256SUMS "out/${VER}.spdx.json" "out/${VER}-provenance.json" release/
           ls -l release
 
@@ -133,7 +129,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout (for release notes only; no rebuild)
+      - name: Checkout (release notes only; no rebuild)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Download verified release artifact
@@ -148,7 +144,7 @@ jobs:
           cd release
           sha256sum -c SHA256SUMS
           for f in arm64-v8a-assets.zip armeabi-v7a-assets.zip x86-assets.zip x86_64-assets.zip \
-                   "${GITHUB_REF_NAME}.spdx.json" "${GITHUB_REF_NAME}-provenance.json" SHA256SUMS; do
+                   routing.json "${GITHUB_REF_NAME}.spdx.json" "${GITHUB_REF_NAME}-provenance.json" SHA256SUMS; do
             [ -f "$f" ] || { echo "missing expected asset: $f"; exit 1; }
           done
           echo "release artifact verified"
@@ -162,8 +158,8 @@ jobs:
           gh release create "$VER" \
             "release/arm64-v8a-assets.zip" "release/armeabi-v7a-assets.zip" \
             "release/x86-assets.zip" "release/x86_64-assets.zip" \
+            "release/routing.json" \
             "release/SHA256SUMS" "release/${VER}.spdx.json" "release/${VER}-provenance.json" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "ProotX support bundle ${VER}" \
             --notes-file "docs/RELEASE_NOTES_${VER}.md"
-

@@ -1,8 +1,8 @@
 name: support
 
-# Trusted modern source build. This workflow runs the privileged pinned builder, so it is
-# restricted to repository-owned branches and manual dispatch. It MUST NOT run on
-# pull_request (PR-controlled code must never be executed through the privileged builder).
+# Trusted dual-lane source build. Runs the privileged pinned builder, so it is
+# restricted to repository-owned branches and manual dispatch. It MUST NOT run
+# on pull_request (PR-controlled code must never reach the privileged builder).
 
 on:
   push:
@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ANDROID_NDK_VERSION: '29.0.14206865'
+
 jobs:
   verify-and-build:
     runs-on: ubuntu-latest
@@ -19,19 +22,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: ''
+
+      - name: Install pinned NDK r29
+        run: sdkmanager "ndk;$ANDROID_NDK_VERSION"
+
       - name: Validate provenance lock
         run: |
           python3 - <<'PY'
           import json
           lock = json.load(open("provenance/sources.lock.json"))
-          assert lock["schemaVersion"] == 1
+          assert lock["schemaVersion"] == 2
           assert lock["applicationMinSdk"] == 21
           assert lock["legacySupportHostRange"] == "21-28"
           assert lock["modernSupportHostRange"] == "29+"
           assert lock["modernSupportBuildApi"] == 24
-          assert lock["toolchain"] == {"ndk": "29", "apiLevel": 24}
+          assert lock["toolchain"]["ndk"] == "29"
+          assert lock["toolchain"]["ndkVersion"] == "29.0.14206865"
           assert lock["termuxPackages"]["commit"] == "0ffca06c59752c6d52c646980d956b961064e1fc"
           assert lock["builder"]["digest"] == "sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab"
+          assert lock["metaLineage"]["sidecar"]["commit"] == "2a7f6d9d46552ed75cf1f2cab2391816f004877b"
+          assert lock["metaLineage"]["leveldb"]["commit"] == "998dd31b6283e07233ec9004d585bce5ab1a4c27"
+          assert lock["metaLineage"]["userlandDefine"] == "-DUSERLAND"
           assert lock["dependencies"][0]["commit"] == "7266fb3e8516535682f5a9c8f3a7e70f6506eddb"
           assert lock["dependencies"][0]["archiveSha256"] == "29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135"
           print("lock OK")
@@ -40,64 +55,99 @@ jobs:
       - name: Guard against floating build inputs
         run: |
           set -euo pipefail
-          if grep -rnE "ubuntu:latest|merge-it|android-5|sed -i" build-support.sh provenance/ ; then
+          if grep -rnE "ubuntu:latest|merge-it|android-5|sed -i" build-support.sh scripts/ provenance/; then
             echo "Floating or blind build input found"; exit 1
           fi
-          bash -n build-support.sh
+          for f in build-support.sh scripts/*.sh; do bash -n "$f"; done
+          python3 -m py_compile scripts/assemble_support.py scripts/release_metadata.py
           echo "builder input guard OK"
 
-      - name: LEGACY INPUT VERIFICATION
-        run: |
-          set -euo pipefail
-          mkdir -p .work/legacy
-          python3 - <<'PY' > /tmp/legacy_zips.txt
-          import json
-          lock = json.load(open("provenance/sources.lock.json"))
-          for abi, digest in lock["legacyRelease"]["zips"].items():
-              print(abi, digest)
-          PY
-          while read -r abi digest; do
-            curl -fsSL -o ".work/legacy/$abi-assets.zip" \
-              "https://github.com/Lord1Egypt/ProotX-Assets-Support/releases/download/v1.0.0/$abi-assets.zip"
-            echo "$digest  .work/legacy/$abi-assets.zip" | sha256sum -c -
-            echo "LEGACY VERIFY  $abi  ZIP  $digest  PASS"
-          done < /tmp/legacy_zips.txt
+      - name: Pull pinned builder
+        run: docker pull ghcr.io/termux/package-builder@sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab
 
-      - name: MODERN SOURCE BUILD (API 24 / NDK r29) arm64 + x86_64
-        run: |
-          set -euo pipefail
-          docker pull ghcr.io/termux/package-builder@sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab
-          ./build-support.sh arm64
-          ./build-support.sh x86_64
+      - name: Build #1 (all four ABIs)
+        env:
+          WORK_DIR: ${{ github.workspace }}/.work-a
+          OUT_DIR: ${{ github.workspace }}/dist-a
+        run: ./build-support.sh all
 
-      - name: MODERN 64-BIT 16KB GATE + slot report
+      - name: Build #2 (all four ABIs, independent working root)
+        env:
+          WORK_DIR: ${{ github.workspace }}/.work-b
+          OUT_DIR: ${{ github.workspace }}/dist-b
+        run: ./build-support.sh all
+
+      - name: Reproducibility comparison
         run: |
           set -euo pipefail
-          echo "slot       abi        filename         source   buildApi  alignment        result"
-          fail=0
-          for abi in arm64 x86_64; do
-            stage=".work/stage/$abi"
-            for f in proot.a10 loader.a10 libtalloc.so.2.a10 libandroid-shmem.so; do
-              so="$stage/$f"
-              if [ ! -f "$so" ]; then echo "MODERN     $abi  $f  MISSING"; fail=1; continue; fi
-              # 32-bit slots are not part of the 16KB requirement
-              cls=$(file -b "$so" | grep -oE 'ELF (32|64)-bit' | grep -oE '32|64')
-              if [ "$cls" != "64" ]; then printf "%-10s %-10s %-16s %-8s %-9s %-16s %s\n" "modern" "$abi" "$f" "source" "24" "(32-bit)" "SKIP"; continue; fi
-              aligns=$(readelf -lW "$so" | awk '/LOAD/{print $NF}' | tr '\n' ' ')
-              ok=PASS
-              for a in $aligns; do
-                hex="${a#0x}"
-                [ "$((16#$hex))" -ge 16384 ] || ok=FAIL
-              done
-              [ "$ok" = PASS ] || fail=1
-              printf "%-10s %-10s %-16s %-8s %-9s %-16s %s\n" "modern" "$abi" "$f" "source" "24" "$aligns" "$ok"
-            done
+          for z in arm64-v8a armeabi-v7a x86 x86_64; do
+            a=$(sha256sum "dist-a/$z-assets.zip" | cut -d' ' -f1)
+            b=$(sha256sum "dist-b/$z-assets.zip" | cut -d' ' -f1)
+            echo "$z  A=$a  B=$b"
+            [ "$a" = "$b" ] || { echo "REPRODUCIBILITY FAILURE for $z"; exit 1; }
           done
-          [ "$fail" -eq 0 ] || { echo "16KB gate FAILED"; exit 1; }
+          cmp dist-a/routing.json dist-b/routing.json
+          echo "two clean builds are byte-identical"
+
+      - name: Modern dependency closure + 16KB alignment report
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, zipfile
+          for z in ["arm64-v8a-assets.zip","armeabi-v7a-assets.zip","x86-assets.zip","x86_64-assets.zip"]:
+              m = json.loads(zipfile.ZipFile(f"dist-a/{z}").read("manifest.json"))
+              below = m["modern64BitBelow16K"]
+              print(f"{z}: common={len(m['commonFiles'])} legacy={len(m['legacyFiles'])} modern={len(m['modernFiles'])} below16k={below}")
+              assert below == [], f"{z}: modern 64-bit below 16K"
+              # every modern NEEDED edge must resolve to platform or modern lane
+              paths = set(m["modernFiles"])
+              names = {p.split("/")[-1] for p in paths}
+              for f in m["files"]:
+                  if f["lane"] != "modern" or not f.get("elf"):
+                      continue
+                  for need in f.get("needed", []):
+                      assert need in names or need.startswith("libc.so") or need in (
+                          "libdl.so","libm.so","liblog.so","libandroid.so","libz.so","libstdc++.so",
+                          "libz.so.1"), f"{z}: dangling modern NEEDED {need} in {f['archivePath']}"
+          print("modern closure + 16KB gate OK")
+          PY
+
+      - name: Release metadata (provenance + SBOM) validation
+        run: |
+          set -euo pipefail
+          python3 scripts/release_metadata.py --dist dist-a --version v1.2.0 --out /tmp/meta \
+            --source-commit "$GITHUB_SHA" --repo-root "$GITHUB_WORKSPACE"
+          ( cd /tmp/meta && sha256sum -c SHA256SUMS )
 
       - name: Upload candidate bundles
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: prootx-support-candidate
-          path: dist/*.zip
+          path: |
+            dist-a/*.zip
+            dist-a/routing.json
           if-no-files-found: error
+
+  fixtures:
+    needs: verify-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download candidate bundles
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: prootx-support-candidate
+          path: candidate
+
+      - name: Run meta + static BusyBox fixtures (API 30 x86_64)
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          disable-animations: true
+          script: bash scripts/run-fixtures.sh candidate/x86_64-assets.zip

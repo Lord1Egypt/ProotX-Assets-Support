@@ -1,8 +1,8 @@
 name: support-validate
 
-# Untrusted-safe validation. Runs on pull requests (including forks) and normal pushes.
-# It performs ONLY static checks: no Docker, no privileged build, no repository write.
-# Token permissions are read-only.
+# Untrusted-safe validation. Runs on pull requests (including forks) and normal
+# pushes. It performs ONLY static checks: no Docker, no privileged build, no
+# repository write. Token permissions are read-only.
 
 on:
   pull_request:
@@ -24,14 +24,18 @@ jobs:
           python3 - <<'PY'
           import json
           lock = json.load(open("provenance/sources.lock.json"))
-          assert lock["schemaVersion"] == 1
+          assert lock["schemaVersion"] == 2
           assert lock["applicationMinSdk"] == 21
           assert lock["legacySupportHostRange"] == "21-28"
           assert lock["modernSupportHostRange"] == "29+"
           assert lock["modernSupportBuildApi"] == 24
-          assert lock["toolchain"] == {"ndk": "29", "apiLevel": 24}
+          assert lock["toolchain"]["ndk"] == "29"
+          assert lock["toolchain"]["ndkVersion"] == "29.0.14206865"
           assert lock["termuxPackages"]["commit"] == "0ffca06c59752c6d52c646980d956b961064e1fc"
           assert lock["builder"]["digest"] == "sha256:374fedda8d2ce7a8ab499735d39329301c4f2f18ea4411b3cf7c93d4668768ab"
+          assert lock["metaLineage"]["sidecar"]["commit"] == "2a7f6d9d46552ed75cf1f2cab2391816f004877b"
+          assert lock["metaLineage"]["leveldb"]["commit"] == "998dd31b6283e07233ec9004d585bce5ab1a4c27"
+          assert lock["metaLineage"]["userlandDefine"] == "-DUSERLAND"
           assert lock["dependencies"][0]["commit"] == "7266fb3e8516535682f5a9c8f3a7e70f6506eddb"
           assert lock["dependencies"][0]["archiveSha256"] == "29385d1ddb619a9c4449ab512bfd55032034b22f724ddf98fc95ff300ea32135"
           print("lock OK")
@@ -40,10 +44,11 @@ jobs:
       - name: Guard against floating build inputs
         run: |
           set -euo pipefail
-          if grep -rnE "ubuntu:latest|merge-it|android-5|sed -i" build-support.sh provenance/ ; then
+          if grep -rnE "ubuntu:latest|merge-it|android-5|sed -i" build-support.sh scripts/ provenance/; then
             echo "Floating or blind build input found"; exit 1
           fi
-          bash -n build-support.sh
+          for f in build-support.sh scripts/*.sh; do bash -n "$f"; done
+          python3 -m py_compile scripts/assemble_support.py scripts/release_metadata.py
           echo "builder input guard OK"
 
       - name: Legacy checksum manifest consistency
@@ -59,5 +64,20 @@ jobs:
           print("legacy checksum manifest OK (", len(lines), "entries )")
           PY
 
+      - name: Per-file source identity map
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          fs = json.load(open("provenance/file_sources.json"))
+          assert any(k.startswith("legacy:") for k in fs)
+          assert any(k.startswith("modern:") for k in fs)
+          assert any(k.startswith("common:") for k in fs)
+          for k, v in fs.items():
+              assert v.get("provenanceStatus"), k
+              assert v.get("reproducibilityStatus"), k
+          print("file source map OK (", len(fs), "entries )")
+          PY
+
       - name: Release metadata tooling syntax
-        run: python3 -m py_compile scripts/release_metadata.py && echo "release_metadata.py OK"
+        run: python3 -m py_compile scripts/release_metadata.py scripts/assemble_support.py && echo "tooling OK"
