@@ -55,15 +55,25 @@ sha_check() { echo "$1  $2" | sha256sum -c - >/dev/null 2>&1; }
 declare -A ABI_TO_TERMUX=( [arm64]="aarch64" [arm]="arm" [x86]="i686" [x86_64]="x86_64" )
 declare -A ABI_TO_ANDROID=( [arm64]="arm64-v8a" [arm]="armeabi-v7a" [x86]="x86" [x86_64]="x86_64" )
 
+# Locate the pinned NDK r29. The runner image may export ANDROID_NDK_HOME to a
+# different NDK (e.g. 27.x); the version is validated from source.properties so a
+# wrong toolchain can never silently produce non-16KB-aligned binaries.
+NDK_PIN_VERSION="29.0.14206865"
+ndk_ok() { # <dir>
+  [ -n "${1:-}" ] && [ -f "$1/source.properties" ] \
+    && grep -q "^Pkg.Revision = ${NDK_PIN_VERSION}$" "$1/source.properties" \
+    && [ -x "$1/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]
+}
 ndk_root() {
-  if [ -n "${ANDROID_NDK_HOME:-}" ]; then echo "$ANDROID_NDK_HOME"; return; fi
-  if [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT/ndk/29.0.14206865" ]; then
-    echo "$ANDROID_SDK_ROOT/ndk/29.0.14206865"; return; fi
-  if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/ndk/29.0.14206865" ]; then
-    echo "$ANDROID_HOME/ndk/29.0.14206865"; return; fi
-  if [ -d "$HOME/Android/Sdk/ndk/29.0.14206865" ]; then
-    echo "$HOME/Android/Sdk/ndk/29.0.14206865"; return; fi
-  die "Android NDK r29 (29.0.14206865) not found; set ANDROID_NDK_HOME"
+  local c
+  for c in \
+    "${ANDROID_NDK_HOME:-}" \
+    "${ANDROID_SDK_ROOT:-}/ndk/$NDK_PIN_VERSION" \
+    "${ANDROID_HOME:-}/ndk/$NDK_PIN_VERSION" \
+    "$HOME/Android/Sdk/ndk/$NDK_PIN_VERSION"; do
+    if ndk_ok "$c"; then echo "$c"; return; fi
+  done
+  die "Android NDK r29 $NDK_PIN_VERSION not found (ANDROID_NDK_HOME='${ANDROID_NDK_HOME:-}', ANDROID_SDK_ROOT='${ANDROID_SDK_ROOT:-}')"
 }
 
 verify_lock() {
