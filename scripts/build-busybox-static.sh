@@ -27,7 +27,15 @@ set -euo pipefail
 : "${OUT:?OUT must be set}"
 ABIS="${ABIS:-arm64 arm x86 x86_64}"
 WORK="${WORK:-$OUT/.busybox-work}"
+# Deterministic environment: BusyBox embeds the build timestamp rendered in the
+# local timezone, so TZ must be fixed or two machines produce different bytes
+# for the same SOURCE_DATE_EPOCH instant. LC_ALL/LANG keep host text tooling
+# (sort/awk) locale-independent. All are set before any configuration step and
+# remain set through the full build.
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1787437959}"
+export TZ=UTC
+export LC_ALL=C
+export LANG=C
 
 BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 export PATH="$BIN:$PATH"

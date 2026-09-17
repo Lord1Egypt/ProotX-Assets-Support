@@ -32,7 +32,12 @@ set -euo pipefail
 : "${PREFIX_ROOT:?PREFIX_ROOT must hold the staged termux prefix}"
 : "${OUT:?OUT must be set}"
 ABIS="${ABIS:-arm64 arm x86 x86_64}"
+# Deterministic environment: fix the timezone/locale so any embedded build
+# timestamp renders identically regardless of the build host.
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1787437959}"
+export TZ=UTC
+export LC_ALL=C
+export LANG=C
 
 BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 export PATH="$BIN:$PATH"
