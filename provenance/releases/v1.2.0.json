@@ -6,31 +6,31 @@
       "files": 43,
       "legacy": 14,
       "modern": 19,
-      "sha256": "fa80875310131b6af94e64a95cbcce1c956abf439a7f99582cc6461b6c84ecd0",
-      "size": 7990756
+      "sha256": "42fd0042b18d8145ebb72aece000404bed8a0911c83505c1acf31e2da5033fe7",
+      "size": 7990762
     },
     "armeabi-v7a-assets.zip": {
       "common": 10,
       "files": 41,
       "legacy": 13,
       "modern": 18,
-      "sha256": "955c50eec20fe7f7b85f65de05c5f8e90005fcfdd30f49b3f96945a3e00ac52c",
-      "size": 6832933
+      "sha256": "496c5d70b0fc8048e0df5ed13f2450d7e9a0324c179c74efa4d5bc6baefb40c9",
+      "size": 6832935
     },
     "x86-assets.zip": {
       "common": 10,
       "files": 41,
       "legacy": 13,
       "modern": 18,
-      "sha256": "8e5cda8a3866589f34b5c451057b4439eb44f1560537b5efb101ed1f26f7c6b2",
-      "size": 7450351
+      "sha256": "df5e8b3a1327ff23225a69b0664b76f47990fc892c298259087f8c2549010703",
+      "size": 7450350
     },
     "x86_64-assets.zip": {
       "common": 10,
       "files": 43,
       "legacy": 14,
       "modern": 19,
-      "sha256": "d777cae53fc950cf96612d0674d06bf4f0fd4fd790bfb6f31587c48bd7e94b42",
+      "sha256": "d3884105a9a63b2a13cd4fc97db6af6bd25d7f0495a68cb3a0461cfa62768816",
       "size": 7874474
     }
   },
@@ -695,7 +695,7 @@
         "reproducibilityStatus": "reproducible",
         "runtimeHostRange": "29+",
         "runtimeName": "busybox_static",
-        "sha256": "842eb40b31d3cfedbcbf032bca7303629124222fb129a51643a68d32fd6fb605",
+        "sha256": "f5c1760db9a8ed7cddf6eb592de9b89ec58f5e5b495129ed3db8905d3b5aa9d9",
         "size": 1358880,
         "soname": "",
         "sourceIdentity": "BusyBox 1.38.0 + termux patchset, NDK r29 static build"
@@ -1806,7 +1806,7 @@
         "reproducibilityStatus": "reproducible",
         "runtimeHostRange": "29+",
         "runtimeName": "busybox_static",
-        "sha256": "00d39fb32f6cf2ed4b4f72e84c60491822f8dee835912de58f64a6043aabdae0",
+        "sha256": "4c100a199cf5140594f38b482d0f11d76c7d4a8600379c2bb02a370284f64f3b",
         "size": 1244836,
         "soname": "",
         "sourceIdentity": "BusyBox 1.38.0 + termux patchset, NDK r29 static build"
@@ -2895,7 +2895,7 @@
         "reproducibilityStatus": "reproducible",
         "runtimeHostRange": "29+",
         "runtimeName": "busybox_static",
-        "sha256": "803cc0d420cb7533dd4fd44e72d85d91e50dae6b94875d977045626b737e9905",
+        "sha256": "b4420631c5f767a30e4ff1413e89fc063d5d6011c40f915a5b280ed7f5a504f8",
         "size": 1398380,
         "soname": "",
         "sourceIdentity": "BusyBox 1.38.0 + termux patchset, NDK r29 static build"
@@ -4009,7 +4009,7 @@
         "reproducibilityStatus": "reproducible",
         "runtimeHostRange": "29+",
         "runtimeName": "busybox_static",
-        "sha256": "661e3b08c9ff7d8207ee44f8b97f2ebdbaeb7fb7b278ed5729e1c9e95b9084e8",
+        "sha256": "7a849c2ac7553daf279ca1675b0516f3db91a51d0beea5ed85204ca7f0b7f963",
         "size": 1360024,
         "soname": "",
         "sourceIdentity": "BusyBox 1.38.0 + termux patchset, NDK r29 static build"
@@ -5492,7 +5492,7 @@
     "schemaVersion": 2
   },
   "schemaVersion": 2,
-  "sourceCommit": "161de9b0071386d2bf8f5489ada940af5abd8966",
+  "sourceCommit": "7dcc6f7c3764213e1c262b12a0eac1852279afde",
   "sourceDateEpoch": 1787437959,
   "termuxPackagesCommit": "0ffca06c59752c6d52c646980d956b961064e1fc",
   "wholeApp16KCompatible": false,

@@ -150,5 +150,7 @@ jobs:
           target: google_apis
           force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          disable-animations: true
+          # disable-animations is intentionally off: the action's `settings put`
+          # call is flaky on hosted runners and aborts before the fixture runs.
+          disable-animations: false
           script: bash scripts/run-fixtures.sh candidate/x86_64-assets.zip
